@@ -1,0 +1,264 @@
+---
+title: "DATA 621---Final Project"
+author: "Critical Thinking Group 2"
+date: "December 8, 2019"
+output:
+  pdf_document:
+    toc: no
+  fontsize: 12pt
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(message=FALSE, warning=FALSE)
+
+# Load libraries
+library(caret)
+library(ClustOfVar)
+# library(corrplot)
+# library(DescTools)
+library(dplyr)
+library(ggplot2)
+# library(knitr)
+# library(MASS)
+library(tidyr)
+library(knitr) #kable
+library(gridExtra) #arrange pltos
+library(corrplot)
+```
+
+
+# Abstract
+
+Nearly a billion people lack access to clean drinking water (World Health Organization 2019). There are many well-known solutions to this problem, but most of them are too expensive to work in the areas hardest-hit. Providing affected areas better information about their water is cheap---but how effective is it?
+
+To answer this question, we examine a dataset collected in rural Bangladesh. It marks whether a household switched wells after learning their routine well had unsafe levels of arsenic.
+
+
+# Introduction
+
+Perhaps the greatest public health crisis in the world remains access to clean drinking water and proper sanitation. Billionaire and philanthropist Bill Gates regards it as so serious, he spent millions of dollars holding a 'Reinvent the Toilet' challenge (Bill and Melinda Gates Foundation 2012).
+
+The central hurdle, however, is not scientific, so much as _economic_. The developing nations that suffer the most from lack of clean water often have the least resources to deal with it. In many cases, solutions imported from developed nations---e.g., industrial water treatment plants---are simply too expensive. Even the winning solutions from the Gates Foundation's reinvented toilets remain too expensive to be practically implemented on a large scale.
+
+Transmitting information is far less expensive than other proposed solutions. But can providing affected households information about their unsafe drinking water really help mitigate the water crisis? Are households able to change water supply, even when it comes with costs?
+
+
+# Literature Review
+
+As of 2017, 29 percent of the world lacked accessed to safe and managed drinking water that is clean, located on premises, and available regularly. Contamination is a massive obstacle to raising this number. Through diarrhea, drinking contaminated water kills almost half a million people each year (World Health Organization 2019).
+
+The largest case of ground water contamination was discovered in Bangladesh in the early 1990s. Throughout the second half of the twentieth century, the government, humanitarian NGOs, and the private sector attempted to solve the country's water supply issues by mass installing _tube wells_ throughout the country. Typically five centimeters in diameter, these tubes are inserted into the ground to depths less than 200 meters. Water is brought to the surface via a hand pump. In 1997, UNICEF announced it had surpassed its Millennium goal to provide 80 percent of Bangladesh with 'safe' drinking water thanks to these tube wells (van Geen, et al., 2002).
+
+Tragically, research in the 1990s slowly uncovered that up to 77 million were drinking from tube wells contaminated with arsenic---half the population of Bangladesh. Arsenic consumption results in cancer, painful skin lesions, and other awful illnesses. The World Health Organization (WHO) considers water with a concentration higher than 10 micrograms/liter as dangerous. Studies estimate that 10 percent of people that consume water with 500 micrograms/liter of arsenic will likely die from its effects (van Geen, et al., 2002).
+
+Although the World Health Organization considers water with concentration higher than 10 micrograms/liter as dangerous, the arsenic concentration used to define unsafe drinking water in the data set is based on the Bangladesh standard of 50 microgram per liter.  All the households in the data set have original wells with arsenic levels above the Bangladesh standard of 50 microgram per liter. So, these are all affected households. The Bangladesh Arsenic Mitigation and water Supply Program (BAMWSP) coordinated a blanket survey of million tubewells. This survey generated nearly five million field-kit results of well-testing, which identified wells as safe or unsafe. Household response surveys in the area of Araihazar upazila (administrative region) indicate roughly half the affected households switched to safe wells. However, the survey also showed that a significant number of households did not stop drinking from unsafe wells after they had learned that it was unsafe (Van Geen, et al., 2006).
+
+Several studies have documented the extent of arsenic poisoning in Bangladesh. A survey conducted in the mid-1990s examined 1630 residents of affected regions. They found that 57.5 percent suffered from skin lesions associated with toxic levels of arsenic (Dhar, et al., 1997). Another study examined 7264 patients, finding that a full one-third suffered from the same kind of skin lesion (Biswas, et al., 1999). Another study investigated chidlren's intellectual function to exposure to arsenic in Bangladesh. The study found that exposure to arsenic in drinking water was associated with reduced scores on measures of intellectual function, before and after adjusting for sociodemographic features known to contribute to intellectual function (Wassermanm et al., 2004).
+
+It is not an overstatement to say this is a crisis that dwarfs the Chernobyl incident, or really any other nuclear accident in history.
+
+There is one bright side, however. A study in the Araihazar upazila district found that the distribution of arsenic in groundwater is 'spatially highly variable.' This means it is not the case that excessive arsenic is concentrated in large regions. Instead, it is often that case that a contaminated well will be very near a safe well. Indeed, van Geen and his coauthors found about 90 percent of residents lived within 100 meters of a safe well (van Geen, et al., 2002).
+
+This fact suggests a quick solution to Bangladesh's water problem: Find the poisoned wells and get residents to switch to a safe water supply that is likely nearby. Poisoned wells can be readily identified with cheap field kits. van Geen, et al., consider the 'real problem' to be convincing residents to switch to the safer wells. In their paper, they conclude 'social barriers to well-switching need to be better understood and, if possible, overcome.'
+
+Researchers set about doing just that. Schoenfeld (2005) likewise confirmed that well switching was influenced by 'less predictable factors,' that interacted with physical variables (distance to nearest safe well, etc.). Social barriers could influence residents to not switch, even after being informed of the health risk of arsenic poisoning. On the other hand, a village 'arsenic activist' could persuade even those far from a safe well to switch.
+
+Another study (Opar, et al., 2007) of the effect of information on well switching determined that 'the response to information is large and rapid,' provided residents were given _well-specific_ information. Mass media campaigns were found to be mostly ineffective (and too expensive), while door-to-door campaigns had a positive effect.
+
+
+
+# Methodology
+
+Our dataset is derived from Madajewicz, et al. (2007; also available for R in the `carData` package as `Wells`). We propose to investigate how social factors and distance to nearest well affect the likelihood of a household to switch from a poisoned to safe well. A sample of its contents should familiarize the reader with its structure:
+
+```{r, echo=FALSE}
+df <- read.csv('http://www.stat.columbia.edu/~gelman/arm/examples/arsenic/wells.dat',
+               sep=' ', stringsAsFactors=FALSE)
+head(df)
+```
+
+It contains 3020 observations.
+
+Our dependent variable is `switch`: coded as 0 if the family does not switch their water source after being informed that it is poisoned, and as 1 if they move to a different well. We hope to predict propensity to switch using these independent variables:
+
+* `arsenic`: Hundreds of micrograms per liter of arsenic detected in a household's original well. Above 0.5 is considered unsafe.
+
+* `distance`: Meters to the nearest safe well.
+
+* `education`: Years of education of the head of household.
+
+* `association`: Dichotomous variable, marking whether any of the members of the household engage in community or civic organizations.
+
+We hypothesize that, theoretically speaking,
+
+* `arsenic` has a _positive_ relationship with `switch`. The more poisoned a well is, the more likely a family is to seek alternatives.
+
+* `distance` is _negatively_ related to `switch`. If using an alternative well is too inconvenient, households are less likely to make a change.
+
+* Higher `education` education _increases_ the propensity for families to switch.
+
+* Higher `association` _increases_ households' probability of switching to safer wells.
+
+Statistical modeling is the chief activity of this paper. We seek to develop a robust model that elucidates the relationship between these independent variables and `switch`.
+
+Logistic regression is the appropriate modeling strategy, as the dependent variable `switch` takes either `0` or `1` as its value. We strongly suspect some of these variables have interaction effects.
+
+To ensure that our model does not overfit the data, we use cross validation. Models are trained on a majority of the dataset, but a smaller portion is held back. This test set will not be examined in data exploration, or be exposed to the models at all. This allows us to compare the models' predictions for the test set with reality, providing an unbiased estimate of model performance.
+
+Of course, performance on the test set needs to be quantified. We propose using the F1 score, frequently used in classification for its ability to balance precision and recall
+
+Even though our winning model will be decided based on its F1 score on the test set, we still report and concern ourselves with the other measures of performance, on both train and test sets. These will include Nagelkerke's $R^2$, deviance based psuedo-$R^2$, and precision/recall.
+
+During the modeling process, we take care to conduct a thorough analysis of the errors, or _residuals_. Residuals can be tricky with logistic regression, so we propose three alternative methods of diagnostics: 
+
+1. _Hosmer-Lemeshow test_: Available in the `ResourceSelection` package (the `hoslem.test` function), this test bins the sample into $g$ groups, and compares the expected and observed proportion of successes in each bin. For a well-fit model, the expected and observed proportions of success will be about equal for each bin.
+
+2. _Binned residuals_: Similar the the HL test, this procedure (via `performance::binned_residuals`) is based on binning residuals. From there, the idea is the same as normal regression: There should be no pattern in the residuals.
+
+3. _Quantile residuals_: Via the `statmod::qresid` package, this is an alternative to deviance and Pearson residuals specifically designed for generalized linear models (GLMs). A model's quantile residuals are statistically guaranteed to have an approximately normal shape if the model is well-fit. (It is unclear to us how useful they are with logistic regression, but they will be explored.)
+
+Outliers and leverage will also be checked to ensure a good fit.
+
+Finally, once the winning model has been ascertained, inferences and conclusions will be drawn.
+
+
+```{r, echo=FALSE}
+library(knitr)
+```
+
+# Data Exploration
+
+The $Wells$ data set is loaded from 'http://www.stat.columbia.edu/~gelman/arm/examples/arsenic/wells.dat'. This data set has 3,020 rows. 
+
+```{r, echo=FALSE}
+df <- read.csv('http://www.stat.columbia.edu/~gelman/arm/examples/arsenic/wells.dat',
+               sep=' ', stringsAsFactors=FALSE)
+
+df$switch <- as.factor(df$switch) #convert switch as factor
+df$assoc <- as.factor(df$assoc) #convert association to factor
+
+#set.seed(1804)
+#train_ix <- createDataPartition(df$switch, p=0.70, list=FALSE)
+#train <- df[train_ix, ]
+#test <- df[-train_ix, ]
+#rm(df)
+
+#print(paste('Rows in training data set:', nrow(train)))
+#print(paste('Rows in test data set:', nrow(test)))
+
+print(paste('Rows in data set:', nrow(df)))
+```
+
+Below is a summary of the well switching data.  As you can see, all the observations in the data set are complete cases. 
+
+```{r, echo=FALSE}
+kable(summary(df))
+```
+
+Below is a box plot of the variables grouped by `switch`. 
+
+It appears that families that originally used wells with higher arsenic switched more compared to families with lower arsenic levels. It seems that families that are farther from safe wells did not switch. The plot suggests that families with higher education tend to switch more. Families with associations to the community don't necessarily have a higher rate of switching. The relationships that the data suggests support the theoretical relationships discussed above except for families' association with the community.
+
+
+```{r, echo=FALSE}
+p1 <- ggplot(df, aes(x=switch, y=arsenic, color=switch)) +geom_boxplot()
+p2 <- ggplot(df, aes(x=switch, y=dist, color=switch)) +geom_boxplot()
+p3 <- ggplot(df, aes(x=switch, y=educ, color=switch)) +geom_boxplot()
+p4 <- ggplot(df, aes(x=assoc, fill=switch)) + geom_histogram(binwidth=1, colour="gray", position="dodge", stat="count")
+grid.arrange(p1, p2, p3, p4, ncol=2)
+```
+
+\vspace{3em}
+
+Of the families with associations to the community (`assoc = 1`), 55% switched. And of the families without associations to the community (`assoc = 0`), 59% switched. 
+
+
+```{r, echo=FALSE}
+print(paste('Percent of families with association to community that switched:', round(nrow(df[df$assoc == 1 & df$switch == 1,])/nrow(df[df$assoc == 1,]), 2)))
+print(paste('Percent of families with association to community that did not switched:', round(nrow(df[df$assoc == 1 & df$switch == 0,])/nrow(df[df$assoc == 1,]), 2)))
+
+print(paste('Percent of families without association to community that switched:', round(nrow(df[df$assoc == 0 & df$switch == 1,])/nrow(df[df$assoc == 0,]), 2)))
+print(paste('Percent of families without association to community that did not switched:', round(nrow(df[df$assoc == 0 & df$switch == 0,])/nrow(df[df$assoc == 0,]), 2)))
+```
+
+\vspace{3em}
+
+Below is a density plot of each explanatory variable grouped by `switch`. 
+
+Families tend to switch the higher the arsenic level is. There are more families without association to the community, but more families switched among those without community associations. This is a very interesting finding. There seems to be a "cut off" point in the number of years of education where there's a reversal in the trend of switching. Families with less than 16 years of education, more proportion-wise switched compared to families with more than 16 years of education.
+
+
+```{r, echo=FALSE}
+df %>%
+  gather(-switch, key='variable', value='value') %>%
+  ggplot(aes(x=value, group=switch, color=switch)) +
+    facet_wrap(~ variable, scales='free') +
+    geom_density()
+```
+
+\vspace{3em}
+
+Below are plots that describe the relationship of each explanatory variable with `switch`. 
+
+There's a clear relationship that as arsenic levels go higher, a switch happens. Distance seems to have a parabolic relationship with switch. There's an amount of distance where families start to no longer switch. Education appears to have a polynomial relationship with switch. 
+
+
+```{r, warning=FALSE, echo=FALSE}
+df %>%
+  gather(-switch, key='variable', value='value') %>%
+  ggplot(aes(x=value, y=switch, group=1)) +
+    geom_point(alpha=0.5) +
+    geom_smooth(color='red', size=.75) +
+    facet_wrap(~ variable, scales='free')
+```
+
+
+```{r, echo=FALSE}
+df$switch <- as.numeric(df$switch)
+df$assoc <- as.numeric(df$assoc)
+```
+
+
+The correlation plot below shows a weak positive correlation between arsenic and switch (0.1839). None of the explanatory variables appear to be strongly correlated to each other. 
+
+```{r, echo=FALSE}
+kable(cor(df), digits=4)
+```
+
+```{r, echo=FALSE}
+corrplot(cor(df), type='upper', method='number', order='hclust', number.cex=0.55)
+```
+
+```{r, echo=FALSE}
+df$switch <- as.factor(df$switch)
+df$assoc <- as.factor(df$assoc)
+```
+
+# References
+
+* Bill and Melinda Gates Foundation. 2012. 'Bill Gates Names Winners of the Reinvent the Toilet Challenge.' Press release. https://www.gatesfoundation.org/media-center/press-releases/2012/08/bill-gates-names-winners-of-the-reinvent-the-toilet-challenge/.
+
+* Biswas, B.K., U.K. Chowdhury, R.K. Dhar, B., et al. 1999. 'Groundwater arsenic contamination and sufferings of people in Bangladesh, a report up to January 1999.' In _International Conference, Arsenic in Bangladesh Ground Water: World's Greatest Arsenic Calamity_, Staten Island, New York.
+
+* Dhar, Ratan Kr, Bhajan Kr Biswas, Gautam Samanta, et al. 1997. 'Groundwater arsenic calamity in Bangladesh.' _Current Science_ vol. 73, no. 1: 48--59.
+
+* Madajewicz, Malgosia, Alexander Pfaff, Alexander van Geen, et al. 2007. 'Can information alone both improve awareness and change behavior? Arsenic contamination of groundwater in Bangladesh.' _Journal of Development Economics_ vol. 84, no. 2: 731--54. Draft available from https://www.ldeo.columbia.edu/~avangeen/publications/documents/Madajewicz_JDE_inpress.pdf.
+
+* Opar, Alisa, Alex Pfaff, A.A. Seddique, et al. 2007. 'Responses of 6500 households to arsenic mitigation in Araihazar, Bangladesh.' _Health & Place_ vol. 13, no. 1: 164--72.
+
+* Schoenfeld, Amy. 2005. 'Area, village, and household response to arsenic testing and labeling of tubewells in Araihazar, Bangladesh.' New York City: Columbia University. Available at https://www.ldeo.columbia.edu/~avangeen/arsenic/documents/Schoenfeld_MS_05.pdf.
+
+* van Geen, Alexander, Habibul Ahsan, Allan H. Horneman, et al. 2002. 'Promotion of well-switching to mitigate the current arsenic crisis in Bangladesh.' _Bulletin of the World Health Organization_ no. 80: 732-737.
+
+* van Geen, Alexander, M. Trevisani, J. Immel, et al. 2006. 'Targeting Low-arsenic Groundwater with Mobile-phone Technology in Araihazar, Bangladesh.' _Journal of Health, Population, and Nutrition_ vol. 24, no. 3: 282--97. Available at https://www.ldeo.columbia.edu/~avangeen/publications/documents/vanGeen_JHPN_06_000.pdf.
+
+* van Geen, Alexander. 2018. 'Q&A With Lex Van Geen on Arsenic Contamination.' Interview by Peter Debaere. _UVA Darden Global Water Blog_. March 1. https://blogs.darden.virginia.edu/globalwater/2018/03/01/qa-with-lex-van-geen/.
+
+* World Health Organization. 2019. 'Drinking water fact sheet.' June 14. https://www.who.int/news-room/fact-sheets/detail/drinking-water/.
+
+* Wasserman, Gail A., et al. "Water Arsenic Exposure and Children's Intellectual Function in Araihazar, Bangladesh." Environmental Health Perspectives, vol. 112, Sept. 2004, https://ehp.niehs.nih.gov/doi/full/10.1289/ehp.6964.
+
+
+
+
+
